@@ -63,7 +63,7 @@ export default function App() {
     };
 
     getImages(searchQuery, page);
-  }, [error, page, searchQuery]);
+  }, [page, searchQuery]);
 
   const handleFormSubmit = searchQuery => {
     setSearchQuery(searchQuery);
