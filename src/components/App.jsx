@@ -1,4 +1,4 @@
-import React, { Component } from 'react';
+import { useState, useEffect } from 'react';
 import Searchbar from './Searchbar/Searchbar';
 import { ImageGallery } from './ImageGallery/ImageGallery';
 import { Button } from './Button/Button';
@@ -7,126 +7,102 @@ import { Loader } from './Loader/Loader';
 import { Modal } from './Modal/Modal';
 import { ErrorMessage } from './ErrorMessage/ErrorMessage.jsx';
 
-class App extends Component {
-	state = {
-		searchQuery: '',
-		images: [],
-		page: 1,
-		error: null,
-		showLoader: false,
-		showModal: false,
-		showBtn: false,
-		modalImageURL: null,
-		showErrorMessage: false,
-	};
+export default function App() {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [images, setImages] = useState([]);
+  const [page, setPage] = useState(1);
+  const [error, setError] = useState(null);
+  const [showLoader, setShowLoader] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [showBtn, setShowBtn] = useState(false);
+  const [modalImageURL, setModalImageURL] = useState(null);
+  const [showErrorMessage, setShowErrorMessage] = useState(false);
 
-	componentDidUpdate(prevProps, prevState) {
-		const prevSearchQuery = prevState.searchQuery;
-		const nextSearchQuery = this.state.searchQuery;
+  useEffect(() => {
+    if (images.length) {
+      window.scrollTo({
+        top: document.documentElement.scrollHeight,
+        behavior: 'smooth',
+      });
+    }
+  }, [images]);
 
-		const prevPage = prevState.page;
-		const nextPage = this.state.page;
+  useEffect(() => {
+    if (!searchQuery) {
+      return;
+    }
 
-		if (prevSearchQuery !== nextSearchQuery || prevPage !== nextPage) {
-			this.getImages(nextSearchQuery, this.state.page);
-		}
-	}
+    const getImages = async (searchQuery, page) => {
+      try {
+        setShowLoader(true);
+        setShowErrorMessage(false);
 
-	getImages(searchQuery, page) {
-		this.setState({ showLoader: true, showErrorMessage: false });
-		fetchImages(searchQuery, page)
-			.then(searchData => {
-				if (searchData.totalHits === 0) {
-					this.setState({ showErrorMessage: true });
-				}
-				if (this.state.page < Math.ceil(searchData.totalHits) / 12) {
-					this.setState({ showBtn: true });
-				} else {
-					this.setState({ showBtn: false });
-				}
-				const mapped = searchData.hits.map(
-					({ id, webformatURL, largeImageURL, tags }) => ({
-						id,
-						webformatURL,
-						largeImageURL,
-						tags,
-					})
-				);
-				this.setState(prevState => ({
-					images: [...prevState.images, mapped].flat(),
-				}));
-			})
-			.catch(error => this.setState({ error }))
-			.finally(() => {
-				this.setState({
-					showLoader: false,
-				});
-				window.scrollTo({
-					top: document.documentElement.scrollHeight,
-					behavior: 'smooth',
-				});
-			});
-	}
+        const data = await fetchImages(searchQuery, page);
 
-	handleFormSubmit = searchQuery => {
-		this.setState({
-			searchQuery: searchQuery,
-			images: [],
-			page: 1,
-			showErrorMessage: false,
-		});
-	};
+        if (data.totalHits === 0) {
+          setShowErrorMessage(true);
+        }
+        if (page < Math.ceil(data.totalHits) / 12) {
+          setShowBtn(true);
+        } else {
+          setShowBtn(false);
+        }
+        data.hits.map(({ id, webformatURL, largeImageURL, tags }) =>
+          setImages(prevImages => [
+            ...prevImages,
+            { id, webformatURL, largeImageURL, tags },
+          ])
+        );
+      } catch (error) {
+        setError(error);
 
-	loadMore = () => {
-		this.setState(prevState => ({
-			page: prevState.page + 1,
-		}));
-	};
+        return Promise.reject(new Error(`No images ${searchQuery}`));
+      } finally {
+        setShowLoader(false);
+      }
+    };
 
-	onImageClick = (largeImageURL, tags) => {
-		this.setState({
-			modalImageURL: { largeImageURL: largeImageURL, tags: tags },
-		});
-		this.toggleModal();
-	};
+    getImages(searchQuery, page);
+  }, [error, page, searchQuery]);
 
-	toggleModal = () => {
-		this.setState(({ showModal }) => ({
-			showModal: !showModal,
-		}));
-	};
+  const handleFormSubmit = searchQuery => {
+    setSearchQuery(searchQuery);
+    setImages([]);
+    setPage(1);
+    setShowErrorMessage(false);
+  };
 
-	render() {
-		const { images, showModal, showLoader, showErrorMessage, showBtn } =
-			this.state;
+  const loadMore = () => {
+    setPage(prevPage => prevPage + 1);
+  };
 
-		return (
-			<>
-				<Searchbar onSubmit={this.handleFormSubmit} />
+  const onImageClick = (largeImageURL, tags) => {
+    setModalImageURL({ largeImageURL, tags });
 
-				{showErrorMessage && (
-					<ErrorMessage searchQuery={this.state.searchQuery} />
-				)}
+    toggleModal();
+  };
 
-				{images.length !== 0 && (
-					<ImageGallery
-						images={this.state.images}
-						onImageClick={this.onImageClick}
-					/>
-				)}
+  const toggleModal = () => {
+    setShowModal(showModal => !showModal);
+  };
 
-				{showLoader && <Loader />}
+  return (
+    <>
+      <Searchbar onSubmit={handleFormSubmit} />
 
-				{showBtn && !showLoader && <Button loadMore={this.loadMore} />}
+      {showErrorMessage && <ErrorMessage searchQuery={searchQuery} />}
 
-				{showModal && (
-					<Modal
-						onClose={this.toggleModal}
-						modalImageURL={this.state.modalImageURL}
-					/>
-				)}
-			</>
-		);
-	}
+      {images.length !== 0 && (
+        <ImageGallery images={images} onImageClick={onImageClick} />
+      )}
+
+      {showLoader && <Loader />}
+
+      {showBtn && !showLoader && <Button loadMore={loadMore} />}
+
+      {showModal && (
+        <Modal onClose={toggleModal} modalImageURL={modalImageURL} />
+      )}
+    </>
+  );
 }
-export default App;
